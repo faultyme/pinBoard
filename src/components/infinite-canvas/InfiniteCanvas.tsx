@@ -45,7 +45,7 @@ export function InfiniteCanvas() {
       <TransformWrapper
         ref={transformRef}
         initialScale={1}
-        minScale={0.25}
+        minScale={0.50}
         maxScale={2}
         centerOnInit
         limitToBounds
