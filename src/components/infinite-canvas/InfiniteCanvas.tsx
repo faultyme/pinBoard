@@ -8,9 +8,9 @@ import {
 import { useRef, useState } from "react";
 
 const DOT_PATTERN: React.CSSProperties = {
-  backgroundImage: "radial-gradient(circle, var(--canvas-dot, #d4d4d4) 1px, transparent 1px)",
+  backgroundImage: "radial-gradient(circle, var(--color-app-dot) 1px, transparent 1px)",
   backgroundSize: "20px 20px",
-  backgroundColor: "var(--canvas-bg, #fafafa)",
+  backgroundColor: "var(--color-app-bg)",
 };
 
 const ZOOM_LEVELS = [ 50, 75, 100, 150, 200] as const;
@@ -41,7 +41,7 @@ export function InfiniteCanvas() {
   const activeLevel = getClosestLevel(currentZoom);
 
   return (
-    <div className="relative h-screen w-screen cursor-grab overflow-hidden">
+    <div className="relative h-dvh w-full cursor-grab overflow-hidden">
       <TransformWrapper
         ref={transformRef}
         initialScale={1}
@@ -66,8 +66,8 @@ export function InfiniteCanvas() {
       <div 
         className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border px-2 py-1 shadow-sm backdrop-blur-md"
         style={{
-          backgroundColor: "color-mix(in srgb, var(--ui-surface, #ffffff) 85%, transparent)",
-          borderColor: "var(--ui-border, #e5e5e5)",
+          backgroundColor: "color-mix(in srgb, var(--color-app-surface) 85%, transparent)",
+          borderColor: "var(--color-app-border)",
         }}
       >
         {ZOOM_LEVELS.map((level) => (
