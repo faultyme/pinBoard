@@ -8,12 +8,12 @@ import {
 import { useRef, useState } from "react";
 
 const DOT_PATTERN: React.CSSProperties = {
-  backgroundImage: "radial-gradient(circle, #d4d4d4 1px, transparent 1px)",
+  backgroundImage: "radial-gradient(circle, var(--canvas-dot, #d4d4d4) 1px, transparent 1px)",
   backgroundSize: "20px 20px",
-  backgroundColor: "#fafafa",
+  backgroundColor: "var(--canvas-bg, #fafafa)",
 };
 
-const ZOOM_LEVELS = [25, 50, 75, 100, 150, 200] as const;
+const ZOOM_LEVELS = [ 50, 75, 100, 150, 200] as const;
 
 export function InfiniteCanvas() {
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -23,23 +23,22 @@ export function InfiniteCanvas() {
     transformRef.current?.centerView(percent / 100, 200);
   };
 
-  const ruler = (
-    <div className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1 shadow">
-      {ZOOM_LEVELS.map((level) => (
-        <button
-          key={level}
-          onClick={() => handleZoomTo(level)}
-          className={`rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
-            currentZoom === level
-              ? "bg-neutral-900 text-white"
-              : "text-neutral-500 hover:text-neutral-900"
-          }`}
-        >
-          {level}
-        </button>
-      ))}
-    </div>
-  );
+  const getClosestLevel = (zoom: number) => {
+    let closest: number = ZOOM_LEVELS[0];
+    let minDiff = Math.abs(zoom - closest);
+    
+    ZOOM_LEVELS.forEach((level) => {
+      const diff = Math.abs(zoom - level);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = level;
+      }
+    });
+    
+    return closest;
+  };
+
+  const activeLevel = getClosestLevel(currentZoom);
 
   return (
     <div className="relative h-screen w-screen cursor-grab overflow-hidden">
@@ -52,9 +51,9 @@ export function InfiniteCanvas() {
         limitToBounds
         disablePadding
         centerZoomedOut={false}
-        wheel={{ step: 0.1 }}
+        wheel={{ step: 0.15 }}
         doubleClick={{ disabled: true }}
-        onTransform={(_ref, state) => setCurrentZoom(Math.round(state.scale * 100))}
+        onTransform={(_ref, state) => setCurrentZoom(state.scale * 100)}
       >
         <TransformComponent
           wrapperStyle={{ width: "100%", height: "100%" }}
@@ -63,7 +62,28 @@ export function InfiniteCanvas() {
           <div className="h-full w-full" style={DOT_PATTERN} />
         </TransformComponent>
       </TransformWrapper>
-      {ruler}
+
+      <div 
+        className="absolute bottom-4 right-4 z-10 flex gap-1 rounded-lg border px-2 py-1 shadow-sm backdrop-blur-md"
+        style={{
+          backgroundColor: "color-mix(in srgb, var(--ui-surface, #ffffff) 85%, transparent)",
+          borderColor: "var(--ui-border, #e5e5e5)",
+        }}
+      >
+        {ZOOM_LEVELS.map((level) => (
+          <button
+            key={level}
+            onClick={() => handleZoomTo(level)}
+            className={`rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+              activeLevel === level
+                ? "bg-brand-blue text-white"
+                : "text-app-text-muted hover:text-app-text"
+            }`}
+          >
+            {level}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
