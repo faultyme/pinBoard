@@ -15,7 +15,7 @@ const DOT_PATTERN: React.CSSProperties = {
   backgroundColor: "var(--color-app-bg)",
 };
 
-const ZOOM_LEVELS = [50, 75, 100, 150, 200] as const;
+const ZOOM_LEVELS = [50, 75, 100, 150, 200,400,500] as const;
 const CANVAS_SIZE = 10000;
 const IMAGE_WIDTH = 320;
 
@@ -178,7 +178,7 @@ export function InfiniteCanvas() {
         ref={transformRef}
         initialScale={1}
         minScale={0.5}
-        maxScale={2}
+        maxScale={5}
         centerOnInit
         limitToBounds
         disablePadding
