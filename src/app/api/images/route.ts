@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
     const posX = Number(form.get("x") ?? 0);
     const posY = Number(form.get("y") ?? 0);
     const startWidth = Number(form.get("width") ?? 320);
-    const startHeight = Number(form.get("height") ?? 320);
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
@@ -48,7 +47,6 @@ export async function POST(req: NextRequest) {
         publicId: public_id,
         position: { x: posX, y: posY },
         width: startWidth,
-        height: startHeight,
         keywords: [],
         link: null,
       })
@@ -70,7 +68,6 @@ export async function PATCH(req: NextRequest) {
     const body = (await req.json()) as Partial<{
       position: { x: number; y: number };
       width: number;
-      height: number;
       title: string;
       link: string | null;
       keywords: string[];
@@ -81,7 +78,6 @@ export async function PATCH(req: NextRequest) {
       .set({
         ...(body.position !== undefined && { position: body.position }),
         ...(body.width !== undefined && { width: body.width }),
-        ...(body.height !== undefined && { height: body.height }),
         ...(body.title !== undefined && { title: body.title }),
         ...(body.link !== undefined && { link: body.link }),
         ...(body.keywords !== undefined && { keywords: body.keywords }),

@@ -15,6 +15,13 @@
       "when": 1792820273082,
       "tag": "0001_past_sinister_six",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792821218563,
+      "tag": "0002_spotty_ozymandias",
+      "breakpoints": true
     }
   ]
 }

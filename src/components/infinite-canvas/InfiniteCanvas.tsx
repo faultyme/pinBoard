@@ -96,7 +96,6 @@ export function InfiniteCanvas() {
         fd.append("x", String(Math.round(pos.x)));
         fd.append("y", String(Math.round(pos.y)));
         fd.append("width", String(DEFAULT_SIZE));
-        fd.append("height", String(DEFAULT_SIZE));
 
         const res = await fetch("/api/images", { method: "POST", body: fd });
         if (!res.ok) throw new Error("Upload failed");
@@ -246,14 +245,13 @@ export function InfiniteCanvas() {
     window.addEventListener("pointerup", onUp);
   };
 
-  // ---------- image resize ----------
+  // ---------- image resize (width only, height follows aspect ratio) ----------
   const startResize = (e: React.PointerEvent, img: ClickableImage) => {
     e.stopPropagation();
     e.preventDefault();
 
     const start = screenToCanvas(e.clientX, e.clientY);
     const startW = img.width;
-    const startH = img.height;
 
     const onMove = (ev: PointerEvent) => {
       const p = screenToCanvas(ev.clientX, ev.clientY);
@@ -262,11 +260,8 @@ export function InfiniteCanvas() {
         MIN_SIZE,
         Math.min(MAX_SIZE, Math.round(startW + dx))
       );
-      const newH = Math.round((newW / startW) * startH);
       setImages((prev) =>
-        prev.map((it) =>
-          it.id === img.id ? { ...it, width: newW, height: newH } : it
-        )
+        prev.map((it) => (it.id === img.id ? { ...it, width: newW } : it))
       );
     };
 
@@ -275,9 +270,7 @@ export function InfiniteCanvas() {
       window.removeEventListener("pointerup", onUp);
       setImages((prev) => {
         const cur = prev.find((it) => it.id === img.id);
-        if (cur) {
-          void patchImage(img.id, { width: cur.width, height: cur.height });
-        }
+        if (cur) void patchImage(img.id, { width: cur.width });
         return prev;
       });
     };
@@ -329,30 +322,54 @@ export function InfiniteCanvas() {
             {images.map((img) => (
               <div
                 key={img.id}
-                className="group absolute"
+                className="group absolute select-none"
                 style={{
                   left: img.position.x,
                   top: img.position.y,
                   width: img.width,
-                  height: img.height,
                 }}
               >
+                {/* width is fixed, height is natural → no cropping */}
                 <img
                   src={img.coverImage}
                   alt={img.title}
                   draggable={false}
-                  onPointerDown={(e) => startMove(e, img)}
-                  className="h-full w-full cursor-move select-none rounded-lg object-cover shadow-md"
+                  className="block w-full select-none rounded-lg shadow-md"
+                  style={{ height: "auto" }}
                 />
 
-                {/* hover controls */}
+                {/* DRAG HANDLE — top-left, visible on hover */}
+                <div
+                  onPointerDown={(e) => startMove(e, img)}
+                  title="Drag to move"
+                  className="absolute -top-2 -left-2 flex h-6 w-6 cursor-move items-center justify-center rounded opacity-0 shadow group-hover:opacity-100"
+                  style={{
+                    backgroundColor: "var(--color-brand-blue)",
+                    color: "white",
+                  }}
+                >
+                  {/* grip dots */}
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <circle cx="3" cy="3" r="1.2" />
+                    <circle cx="9" cy="3" r="1.2" />
+                    <circle cx="3" cy="9" r="1.2" />
+                    <circle cx="9" cy="9" r="1.2" />
+                  </svg>
+                </div>
+
+                {/* hover controls — themed */}
                 <div className="absolute -top-2 right-0 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingId(img.id === editingId ? null : img.id);
                     }}
-                    className="rounded bg-white px-2 py-0.5 text-xs shadow"
+                    className="rounded border px-2 py-0.5 text-xs shadow-sm"
+                    style={{
+                      backgroundColor: "var(--color-app-surface)",
+                      borderColor: "var(--color-app-border)",
+                      color: "var(--color-app-text)",
+                    }}
                   >
                     Edit
                   </button>
@@ -361,16 +378,20 @@ export function InfiniteCanvas() {
                       e.stopPropagation();
                       void deleteImage(img.id);
                     }}
-                    className="rounded bg-red-500 px-2 py-0.5 text-xs text-white shadow"
+                    className="rounded px-2 py-0.5 text-xs text-white shadow-sm"
+                    style={{ backgroundColor: "var(--color-brand-red)" }}
                   >
                     Delete
                   </button>
                 </div>
 
-                {/* resize handle (bottom-right) */}
+                {/* resize handle — themed */}
                 <div
                   onPointerDown={(e) => startResize(e, img)}
-                  className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize rounded-sm bg-white opacity-0 shadow group-hover:opacity-100"
+                  className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize rounded-sm opacity-0 shadow group-hover:opacity-100"
+                  style={{
+                    backgroundColor: "var(--color-brand-blue)",
+                  }}
                 />
 
                 {/* edit popup */}
@@ -449,16 +470,29 @@ function EditPopup({
   const [link, setLink] = useState(img.link ?? "");
   const [keywords, setKeywords] = useState(img.keywords.join(", "));
 
+  const inputClass =
+    "mb-2 w-full rounded border px-2 py-1 text-sm outline-none";
+
   return (
     <div
-      className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border bg-white p-3 shadow-lg"
+      className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border p-3 shadow-lg"
+      style={{
+        backgroundColor: "var(--color-app-surface)",
+        borderColor: "var(--color-app-border)",
+        color: "var(--color-app-text)",
+      }}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <label className="mb-1 block text-xs font-medium">Title</label>
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="mb-2 w-full rounded border px-2 py-1 text-sm"
+        className={inputClass}
+        style={{
+          backgroundColor: "var(--color-app-bg)",
+          borderColor: "var(--color-app-border)",
+          color: "var(--color-app-text)",
+        }}
       />
 
       <label className="mb-1 block text-xs font-medium">Link</label>
@@ -466,7 +500,12 @@ function EditPopup({
         value={link}
         onChange={(e) => setLink(e.target.value)}
         placeholder="https://..."
-        className="mb-2 w-full rounded border px-2 py-1 text-sm"
+        className={inputClass}
+        style={{
+          backgroundColor: "var(--color-app-bg)",
+          borderColor: "var(--color-app-border)",
+          color: "var(--color-app-text)",
+        }}
       />
 
       <label className="mb-1 block text-xs font-medium">Keywords</label>
@@ -474,13 +513,23 @@ function EditPopup({
         value={keywords}
         onChange={(e) => setKeywords(e.target.value)}
         placeholder="comma, separated"
-        className="mb-3 w-full rounded border px-2 py-1 text-sm"
+        className={inputClass + " mb-3"}
+        style={{
+          backgroundColor: "var(--color-app-bg)",
+          borderColor: "var(--color-app-border)",
+          color: "var(--color-app-text)",
+        }}
       />
 
       <div className="flex justify-end gap-2">
         <button
           onClick={onClose}
           className="rounded border px-3 py-1 text-xs"
+          style={{
+            backgroundColor: "var(--color-app-surface)",
+            borderColor: "var(--color-app-border)",
+            color: "var(--color-app-text-muted)",
+          }}
         >
           Cancel
         </button>
@@ -495,7 +544,8 @@ function EditPopup({
                 .filter(Boolean),
             })
           }
-          className="rounded bg-brand-blue px-3 py-1 text-xs text-white"
+          className="rounded px-3 py-1 text-xs text-white"
+          style={{ backgroundColor: "var(--color-brand-blue)" }}
         >
           Save
         </button>

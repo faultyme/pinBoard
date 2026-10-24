@@ -10,7 +10,6 @@ export const clickableImages = pgTable("board_images", {
   publicId: text("public_id").notNull().unique(),
 
   width: integer("width").notNull().default(320),
-  height: integer("height").notNull().default(320),
 
   position: jsonb("position")
     .$type<{ x: number; y: number }>()
