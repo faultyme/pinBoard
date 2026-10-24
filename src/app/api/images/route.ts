@@ -3,6 +3,22 @@ import { db } from "@/lib/neondb";
 import { clickableImages } from "@/lib/neondb/schemas";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
+export async function GET() {
+  try {
+    const rows = await db
+      .select()
+      .from(clickableImages)
+      .orderBy(clickableImages.id);   
+
+    return NextResponse.json(rows);
+  } catch (err) {
+    console.error("GET /api/images failed:", err);
+    return NextResponse.json({ error: "Failed to load images" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
@@ -35,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(row);
   } catch (err) {
-    console.error(err);
+    console.error("POST /api/images failed:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }
@@ -59,7 +75,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error(err);
+    console.error("DELETE /api/images failed:", err);
     return NextResponse.json({ error: "Delete failed" }, { status: 500 });
   }
 }
