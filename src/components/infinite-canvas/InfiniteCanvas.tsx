@@ -15,9 +15,12 @@ const DOT_PATTERN: React.CSSProperties = {
   backgroundColor: "var(--color-app-bg)",
 };
 
-const ZOOM_LEVELS = [50, 75, 100, 150, 200,400,500] as const;
+const ZOOM_LEVELS = [50, 75, 100, 150, 200, 400, 500] as const;
 const CANVAS_SIZE = 10000;
 const IMAGE_WIDTH = 320;
+const DEFAULT_SIZE = 320;
+const MIN_SIZE = 80;
+const MAX_SIZE = 2000;
 
 export function InfiniteCanvas() {
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -27,6 +30,7 @@ export function InfiniteCanvas() {
   const [images, setImages] = useState<ClickableImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Track transform state locally (library doesn't expose transformState on instance)
   const [transformState, setTransformState] = useState({
@@ -91,6 +95,8 @@ export function InfiniteCanvas() {
         fd.append("file", file);
         fd.append("x", String(Math.round(pos.x)));
         fd.append("y", String(Math.round(pos.y)));
+        fd.append("width", String(DEFAULT_SIZE));
+        fd.append("height", String(DEFAULT_SIZE));
 
         const res = await fetch("/api/images", { method: "POST", body: fd });
         if (!res.ok) throw new Error("Upload failed");
@@ -165,6 +171,121 @@ export function InfiniteCanvas() {
     handleFiles(e.dataTransfer.files, e.clientX, e.clientY);
   };
 
+  // ---------- persistence helpers ----------
+  const patchImage = useCallback(
+    async (id: string, patch: Partial<ClickableImage>) => {
+      // optimistic update
+      setImages((prev) =>
+        prev.map((img) => (img.id === id ? { ...img, ...patch } : img))
+      );
+      try {
+        const res = await fetch(`/api/images?id=${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error("Update failed");
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    []
+  );
+
+  const deleteImage = useCallback(async (id: string) => {
+    if (!confirm("Delete this image?")) return;
+    setImages((prev) => prev.filter((img) => img.id !== id));
+    try {
+      await fetch(`/api/images?id=${id}`, { method: "DELETE" });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // ---------- image drag (move) ----------
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(
+    null
+  );
+
+  const startMove = (e: React.PointerEvent, img: ClickableImage) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startPointer = screenToCanvas(e.clientX, e.clientY);
+    const offsetX = startPointer.x - img.position.x;
+    const offsetY = startPointer.y - img.position.y;
+    setDragOffset({ x: offsetX, y: offsetY });
+
+    const onMove = (ev: PointerEvent) => {
+      const p = screenToCanvas(ev.clientX, ev.clientY);
+      const newPos = {
+        x: Math.round(p.x - offsetX),
+        y: Math.round(p.y - offsetY),
+      };
+      setImages((prev) =>
+        prev.map((it) =>
+          it.id === img.id ? { ...it, position: newPos } : it
+        )
+      );
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDragOffset(null);
+      const p = screenToCanvas(ev.clientX, ev.clientY);
+      void patchImage(img.id, {
+        position: {
+          x: Math.round(p.x - offsetX),
+          y: Math.round(p.y - offsetY),
+        },
+      });
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  // ---------- image resize ----------
+  const startResize = (e: React.PointerEvent, img: ClickableImage) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const start = screenToCanvas(e.clientX, e.clientY);
+    const startW = img.width;
+    const startH = img.height;
+
+    const onMove = (ev: PointerEvent) => {
+      const p = screenToCanvas(ev.clientX, ev.clientY);
+      const dx = p.x - start.x;
+      const newW = Math.max(
+        MIN_SIZE,
+        Math.min(MAX_SIZE, Math.round(startW + dx))
+      );
+      const newH = Math.round((newW / startW) * startH);
+      setImages((prev) =>
+        prev.map((it) =>
+          it.id === img.id ? { ...it, width: newW, height: newH } : it
+        )
+      );
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setImages((prev) => {
+        const cur = prev.find((it) => it.id === img.id);
+        if (cur) {
+          void patchImage(img.id, { width: cur.width, height: cur.height });
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <div
       ref={wrapperRef}
@@ -185,6 +306,7 @@ export function InfiniteCanvas() {
         centerZoomedOut={false}
         wheel={{ step: 0.15 }}
         doubleClick={{ disabled: true }}
+        panning={{ disabled: dragOffset !== null }}
         // Sync zoom UI + transform state used for coordinate math
         onTransform={(_ref, state) => {
           setCurrentZoom(state.scale * 100);
@@ -205,22 +327,64 @@ export function InfiniteCanvas() {
         >
           <div className="h-full w-full" style={DOT_PATTERN}>
             {images.map((img) => (
-              <img
+              <div
                 key={img.id}
-                src={img.coverImage}
-                alt={img.title}
-                draggable={false}
+                className="group absolute"
                 style={{
-                  position: "absolute",
                   left: img.position.x,
                   top: img.position.y,
-                  width: IMAGE_WIDTH,
-                  height: "auto",
-                  borderRadius: 8,
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-                  pointerEvents: "auto",
+                  width: img.width,
+                  height: img.height,
                 }}
-              />
+              >
+                <img
+                  src={img.coverImage}
+                  alt={img.title}
+                  draggable={false}
+                  onPointerDown={(e) => startMove(e, img)}
+                  className="h-full w-full cursor-move select-none rounded-lg object-cover shadow-md"
+                />
+
+                {/* hover controls */}
+                <div className="absolute -top-2 right-0 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(img.id === editingId ? null : img.id);
+                    }}
+                    className="rounded bg-white px-2 py-0.5 text-xs shadow"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void deleteImage(img.id);
+                    }}
+                    className="rounded bg-red-500 px-2 py-0.5 text-xs text-white shadow"
+                  >
+                    Delete
+                  </button>
+                </div>
+
+                {/* resize handle (bottom-right) */}
+                <div
+                  onPointerDown={(e) => startResize(e, img)}
+                  className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize rounded-sm bg-white opacity-0 shadow group-hover:opacity-100"
+                />
+
+                {/* edit popup */}
+                {editingId === img.id && (
+                  <EditPopup
+                    img={img}
+                    onClose={() => setEditingId(null)}
+                    onSave={(patch) => {
+                      void patchImage(img.id, patch);
+                      setEditingId(null);
+                    }}
+                  />
+                )}
+              </div>
             ))}
           </div>
         </TransformComponent>
@@ -264,6 +428,77 @@ export function InfiniteCanvas() {
             {level}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit popup rendered below an image
+// ---------------------------------------------------------------------------
+function EditPopup({
+  img,
+  onClose,
+  onSave,
+}: {
+  img: ClickableImage;
+  onClose: () => void;
+  onSave: (patch: Partial<ClickableImage>) => void;
+}) {
+  const [title, setTitle] = useState(img.title);
+  const [link, setLink] = useState(img.link ?? "");
+  const [keywords, setKeywords] = useState(img.keywords.join(", "));
+
+  return (
+    <div
+      className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border bg-white p-3 shadow-lg"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <label className="mb-1 block text-xs font-medium">Title</label>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="mb-2 w-full rounded border px-2 py-1 text-sm"
+      />
+
+      <label className="mb-1 block text-xs font-medium">Link</label>
+      <input
+        value={link}
+        onChange={(e) => setLink(e.target.value)}
+        placeholder="https://..."
+        className="mb-2 w-full rounded border px-2 py-1 text-sm"
+      />
+
+      <label className="mb-1 block text-xs font-medium">Keywords</label>
+      <input
+        value={keywords}
+        onChange={(e) => setKeywords(e.target.value)}
+        placeholder="comma, separated"
+        className="mb-3 w-full rounded border px-2 py-1 text-sm"
+      />
+
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onClose}
+          className="rounded border px-3 py-1 text-xs"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() =>
+            onSave({
+              title,
+              link: link || null,
+              keywords: keywords
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            })
+          }
+          className="rounded bg-brand-blue px-3 py-1 text-xs text-white"
+        >
+          Save
+        </button>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { deleteImage, uploadImage } from "@/lib/cloudinary/server";
 import { db } from "@/lib/neondb";
 import { clickableImages } from "@/lib/neondb/schemas";
+import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
     const file = form.get("file");
     const posX = Number(form.get("x") ?? 0);
     const posY = Number(form.get("y") ?? 0);
+    const startWidth = Number(form.get("width") ?? 320);
+    const startHeight = Number(form.get("height") ?? 320);
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
@@ -44,6 +47,8 @@ export async function POST(req: NextRequest) {
         coverImage: url,
         publicId: public_id,
         position: { x: posX, y: posY },
+        width: startWidth,
+        height: startHeight,
         keywords: [],
         link: null,
       })
@@ -53,6 +58,42 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("POST /api/images failed:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const body = (await req.json()) as Partial<{
+      position: { x: number; y: number };
+      width: number;
+      height: number;
+      title: string;
+      link: string | null;
+      keywords: string[];
+    }>;
+
+    const [row] = await db
+      .update(clickableImages)
+      .set({
+        ...(body.position !== undefined && { position: body.position }),
+        ...(body.width !== undefined && { width: body.width }),
+        ...(body.height !== undefined && { height: body.height }),
+        ...(body.title !== undefined && { title: body.title }),
+        ...(body.link !== undefined && { link: body.link }),
+        ...(body.keywords !== undefined && { keywords: body.keywords }),
+      })
+      .where(eq(clickableImages.id, id))
+      .returning();
+
+    if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(row);
+  } catch (err) {
+    console.error("PATCH /api/images failed:", err);
+    return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
 

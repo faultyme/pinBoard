@@ -1,5 +1,5 @@
 
-import { pgTable, uuid, text, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, jsonb, integer } from "drizzle-orm/pg-core";
 
 export const clickableImages = pgTable("board_images", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -8,6 +8,9 @@ export const clickableImages = pgTable("board_images", {
 
   coverImage: text("cover_image").notNull(),
   publicId: text("public_id").notNull().unique(),
+
+  width: integer("width").notNull().default(320),
+  height: integer("height").notNull().default(320),
 
   position: jsonb("position")
     .$type<{ x: number; y: number }>()
